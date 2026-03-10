@@ -3,9 +3,10 @@
 # -----------------------------------------------------------------------------
 
 resource "aws_security_group" "fsx_openzfs" {
-  name_prefix = "${var.app_unique_id}-fsx-zfs-"
-  description = "FSx for OpenZFS"
-  vpc_id      = local.persistent.vpc_id
+  name_prefix            = "${var.app_unique_id}-fsx-zfs-"
+  description            = "FSx for OpenZFS"
+  vpc_id                 = local.persistent.vpc_id
+  revoke_rules_on_delete = true
 
   ingress {
     description = "NFS from VPC"

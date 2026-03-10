@@ -3,9 +3,10 @@
 # -----------------------------------------------------------------------------
 
 resource "aws_security_group" "efs" {
-  name_prefix = "${var.app_unique_id}-efs-"
-  description = "EFS mount targets"
-  vpc_id      = local.persistent.vpc_id
+  name_prefix            = "${var.app_unique_id}-efs-"
+  description            = "EFS mount targets"
+  vpc_id                 = local.persistent.vpc_id
+  revoke_rules_on_delete = true
 
   ingress {
     description = "NFS from VPC"

@@ -4,9 +4,10 @@
 # -----------------------------------------------------------------------------
 
 resource "aws_security_group" "fsx_windows" {
-  name_prefix = "${var.app_unique_id}-fsx-win-"
-  description = "FSx for Windows File Server"
-  vpc_id      = local.persistent.vpc_id
+  name_prefix            = "${var.app_unique_id}-fsx-win-"
+  description            = "FSx for Windows File Server"
+  vpc_id                 = local.persistent.vpc_id
+  revoke_rules_on_delete = true
 
   ingress {
     description = "SMB from VPC"

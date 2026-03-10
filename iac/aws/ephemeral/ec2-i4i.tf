@@ -24,9 +24,10 @@ data "aws_ami" "amazon_linux_2023" {
 }
 
 resource "aws_security_group" "ec2_i4i" {
-  name_prefix = "${var.app_unique_id}-ec2-i4i-"
-  description = "I4i EC2 instance"
-  vpc_id      = local.persistent.vpc_id
+  name_prefix            = "${var.app_unique_id}-ec2-i4i-"
+  description            = "I4i EC2 instance"
+  vpc_id                 = local.persistent.vpc_id
+  revoke_rules_on_delete = true
 
   egress {
     from_port   = 0

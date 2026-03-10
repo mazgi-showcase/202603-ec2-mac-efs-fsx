@@ -20,4 +20,10 @@ resource "aws_directory_service_directory" "main" {
   tags = {
     Name = "${var.app_unique_id}-ad"
   }
+
+  # Directory deletion can take a long time while waiting for dependent
+  # resources (WorkSpaces directory registration, FSx) to fully clean up.
+  timeouts {
+    delete = "60m"
+  }
 }
