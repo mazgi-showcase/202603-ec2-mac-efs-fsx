@@ -1,0 +1,10 @@
+#!/bin/bash
+
+yum update -y
+yum install docker git nmap-ncat tmux -y
+systemctl start docker
+systemctl enable docker
+usermod -aG docker ec2-user
+mkdir -p /usr/local/lib/docker/cli-plugins/
+curl -o /usr/local/lib/docker/cli-plugins/docker-compose -L https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)
+chmod +x /usr/local/lib/docker/cli-plugins/docker-compose

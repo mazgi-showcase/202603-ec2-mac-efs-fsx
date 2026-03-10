@@ -1,0 +1,162 @@
+# https://docs.docker.com/compose/compose-file/compose-file-v3/#extension-fields
+x-service-provisioning-base: &provisioning-base
+  build:
+    args:
+      GID: ${GID:-0}
+      UID: ${UID:-0}
+    context: Dockerfile.d/provisioning
+  command:
+    - zsh
+    - --login
+    - -c
+    - |
+      docker-util.keep-running.zsh --reset-status
+      /workspace/scripts/provisioning.init-terraform-with-backend.zsh --backend=$${_TERRAFORM_BACKEND_TYPE}\
+      && docker-util.keep-running.zsh --record-success\
+      || {
+        docker-util.keep-running.zsh --record-failure
+        exit 1
+      }
+      docker-util.keep-running.zsh --wait-signals
+  environment: &provisioning-base-environment
+    PROJECT_UNIQUE_ID: ~
+    # <AWS>
+    AWS_ACCESS_KEY_ID: ~
+    AWS_ACCOUNT_ID: ~
+    AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
+    AWS_SECRET_ACCESS_KEY: ~
+    # </AWS>
+    # <Azure>
+    AZURE_DEFAULT_LOCATION: ${AZURE_DEFAULT_LOCATION:-centralus}
+    ARM_CLIENT_ID: ~
+    ARM_CLIENT_SECRET: ~
+    ARM_SUBSCRIPTION_ID: ~
+    ARM_TENANT_ID: ~
+    # </Azure>
+    # <Google>
+    CLOUDSDK_CORE_PROJECT: ~
+    GCP_DEFAULT_REGION: ${GCP_DEFAULT_REGION:-us-central1}
+    GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-/workspace/config/credentials/google-cloud-keyfile.provisioning-owner.json}
+    # </Google>
+    # Suppress to be created the ".terraform" directory in the working directory.
+    TF_DATA_DIR: /tmp/provisioning/.terraform
+    TF_PLUGIN_CACHE_DIR: /tmp/provisioning/.terraform.d/plugin-cache
+    _TERRAFORM_BACKEND_TYPE: ${_TERRAFORM_BACKEND_TYPE:-none}
+    TF_VAR_allowed_ipaddr_list: ${TF_VAR_allowed_ipaddr_list}
+    TF_VAR_aws_access_key: ${AWS_ACCESS_KEY_ID}
+    TF_VAR_aws_default_region: ${AWS_DEFAULT_REGION:-us-east-1}
+    TF_VAR_aws_secret_key: ${AWS_SECRET_ACCESS_KEY}
+    TF_VAR_azure_default_location: ${AZURE_DEFAULT_LOCATION:-centralus}
+    TF_VAR_gcp_default_region: ${GCP_DEFAULT_REGION:-us-central1}
+    TF_VAR_gcp_project_id: ${CLOUDSDK_CORE_PROJECT}
+    TF_VAR_project_unique_id: ${PROJECT_UNIQUE_ID}
+  init: true
+  user: "${UID:-0}:${GID:-0}"
+  volumes:
+    - provisioning-tmp:/tmp/provisioning
+    - provisioning-home-developer:/home/developer
+    - provisioning-home-root:/root # for macOS & Windows
+    - /var/run/docker.sock:/var/run/docker.sock
+    - .:/workspace
+  working_dir: /workspace/provisioning
+
+services:
+  # You are able to implement your service like below.
+  provisioning:
+    <<: *provisioning-base
+
+  # The following services are for Demonstration and CI/CD purposes; therefore, you can remove these.
+  provisioning-use-only-aws:
+    <<: *provisioning-base
+    environment:
+      PROJECT_UNIQUE_ID: ~
+      # <AWS>
+      AWS_ACCESS_KEY_ID: ~
+      AWS_ACCOUNT_ID: ~
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
+      AWS_SECRET_ACCESS_KEY: ~
+      # </AWS>
+      # Suppress to be created the ".terraform" directory in the working directory.
+      TF_DATA_DIR: /tmp/provisioning/.terraform
+      TF_PLUGIN_CACHE_DIR: /tmp/provisioning/.terraform.d/plugin-cache
+      _TERRAFORM_BACKEND_TYPE: s3
+      TF_VAR_allowed_ipaddr_list: ${TF_VAR_allowed_ipaddr_list}
+      TF_VAR_aws_access_key: ${AWS_ACCESS_KEY_ID}
+      TF_VAR_aws_default_region: ${AWS_DEFAULT_REGION:-us-east-1}
+      TF_VAR_aws_secret_key: ${AWS_SECRET_ACCESS_KEY}
+      TF_VAR_project_unique_id: ${PROJECT_UNIQUE_ID}
+    profiles:
+      - use-only-aws
+  provisioning-use-only-azure:
+    <<: *provisioning-base
+    environment:
+      PROJECT_UNIQUE_ID: ~
+      # <Azure>
+      AZURE_DEFAULT_LOCATION: ${AZURE_DEFAULT_LOCATION:-centralus}
+      ARM_CLIENT_ID: ~
+      ARM_CLIENT_SECRET: ~
+      ARM_SUBSCRIPTION_ID: ~
+      ARM_TENANT_ID: ~
+      # </Azure>
+      # Suppress to be created the ".terraform" directory in the working directory.
+      TF_DATA_DIR: /tmp/provisioning/.terraform
+      TF_PLUGIN_CACHE_DIR: /tmp/provisioning/.terraform.d/plugin-cache
+      _TERRAFORM_BACKEND_TYPE: azurerm
+      TF_VAR_allowed_ipaddr_list: ${TF_VAR_allowed_ipaddr_list}
+      TF_VAR_azure_default_location: ${AZURE_DEFAULT_LOCATION:-centralus}
+      TF_VAR_project_unique_id: ${PROJECT_UNIQUE_ID}
+    profiles:
+      - use-only-azure
+  provisioning-use-only-google-cloud:
+    <<: *provisioning-base
+    environment:
+      PROJECT_UNIQUE_ID: ~
+      # <Google>
+      CLOUDSDK_CORE_PROJECT: ~
+      GCP_DEFAULT_REGION: ${GCP_DEFAULT_REGION:-us-central1}
+      GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-/workspace/config/credentials/google-cloud-keyfile.provisioning-owner.json}
+      # </Google>
+      # Suppress to be created the ".terraform" directory in the working directory.
+      TF_DATA_DIR: /tmp/provisioning/.terraform
+      TF_PLUGIN_CACHE_DIR: /tmp/provisioning/.terraform.d/plugin-cache
+      _TERRAFORM_BACKEND_TYPE: gcs
+      TF_VAR_allowed_ipaddr_list: ${TF_VAR_allowed_ipaddr_list}
+      TF_VAR_gcp_default_region: ${GCP_DEFAULT_REGION:-us-central1}
+      TF_VAR_gcp_project_id: ${CLOUDSDK_CORE_PROJECT}
+      TF_VAR_project_unique_id: ${PROJECT_UNIQUE_ID}
+    profiles:
+      - use-only-google-cloud
+
+  # for Prettier Code Formatter
+  # ["INFO" - 00:00:00 AM] Attempted to determine module path from /path/to/the/project
+  # ["ERROR" - 00:00:00 AM] Failed to load module. If you have prettier or plugins referenced in package.json, ensure you have run `npm install`
+  # ["ERROR" - 00:00:00 AM] Cannot find module 'prettier' from '/path/to/the/project'
+  workspace:
+    build:
+      args:
+        GID: ${GID:-0}
+        UID: ${UID:-0}
+      context: Dockerfile.d/workspace
+    command:
+      - zsh
+      - --login
+      - -c
+      - |
+        npm-check-updates --upgrade
+        npm install
+        npm audit fix
+        sort-package-json
+        sleep infinity
+    init: true
+    user: ${UID:-0}:${GID:-0}
+    volumes:
+      - .:/workspace
+    working_dir: /workspace
+
+volumes:
+  provisioning-tmp:
+    driver: local
+  provisioning-home-developer:
+    driver: local
+  provisioning-home-root:
+    driver: local

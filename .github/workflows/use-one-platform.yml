@@ -1,0 +1,113 @@
+name: use-one-platform
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  provisioning:
+    timeout-minutes: 16
+    runs-on: ${{ matrix.runs-on }}
+    strategy:
+      matrix:
+        platform:
+          - aws
+          - azure
+          - google-cloud
+        runs-on:
+          - ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Export UIDs as environment variables, for Linux
+        if: matrix.runs-on == 'ubuntu-latest'
+        run: |
+          cat<<EOE > .env
+          # Todo https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/about-githubs-ip-addresses
+          TF_VAR_allowed_ipaddr_list=["0.0.0.0/0"]
+          EOE
+          echo "UID=$(id -u)" >> .env
+          echo "GID=$(id -g)" >> .env
+          echo "DOCKER_GID=$(getent group docker | cut -d : -f 3)" >> .env
+      - name: Generate and export Project ID as the environment variable
+        run: |
+          export _P=${{ matrix.platform }}
+          export _R=${{ matrix.runs-on }}
+          echo "PROJECT_UNIQUE_ID=${PROJECT_UNIQUE_ID}-1${_P:0:2}${_R:0:1}" >> .env
+        env:
+          PROJECT_UNIQUE_ID: ${{ secrets.PROJECT_UNIQUE_ID }}
+      - name: Export credentials for AWS
+        if: matrix.platform == 'aws'
+        run: |
+          echo "AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}" >> .env
+          echo "AWS_ACCOUNT_ID=${AWS_ACCOUNT_ID}" >> .env
+          echo "AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}" >> .env
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      - name: Export credentials for Azure
+        if: matrix.platform == 'azure'
+        run: |
+          echo "ARM_CLIENT_ID=${ARM_CLIENT_ID}" >> .env
+          echo "ARM_CLIENT_SECRET=${ARM_CLIENT_SECRET}" >> .env
+          echo "ARM_SUBSCRIPTION_ID=${ARM_SUBSCRIPTION_ID}" >> .env
+          echo "ARM_TENANT_ID=${ARM_TENANT_ID}" >> .env
+        env:
+          ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
+          ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+          ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
+      - name: Export credentials for Google Cloud
+        if: matrix.platform == 'google-cloud'
+        run: |
+          echo "CLOUDSDK_CORE_PROJECT=${CLOUDSDK_CORE_PROJECT}" >> .env
+        env:
+          CLOUDSDK_CORE_PROJECT: ${{ secrets.CLOUDSDK_CORE_PROJECT }}
+      - name: Export GOOGLE_SA_KEY
+        if: matrix.platform == 'google-cloud'
+        run: |
+          echo ${GOOGLE_SA_KEY} > config/credentials/google-cloud-keyfile.provisioning-owner.json
+          jq -e '. | select(.type=="service_account")' config/credentials/google-cloud-keyfile.provisioning-owner.json > /dev/null
+        env:
+          GOOGLE_SA_KEY: ${{ secrets.GOOGLE_SA_KEY }}
+      - name: (debug)Check services
+        run: |
+          docker compose --profile=use-only-${{ matrix.platform }} config provisioning-use-only-${{ matrix.platform }}
+      - name: Build containers
+        timeout-minutes: 4
+        run: |
+          docker compose --profile=use-only-${{ matrix.platform }} build provisioning-use-only-${{ matrix.platform }}
+      - name: Start the service
+        timeout-minutes: 8
+        run: |
+          docker compose --profile=use-only-${{ matrix.platform }} up provisioning-use-only-${{ matrix.platform }} --detach
+          while :
+          do
+            docker compose --profile=use-only-${{ matrix.platform }} ps --format=json provisioning-use-only-${{ matrix.platform }}\
+             | jq -e '.[] | select(.Health=="healthy")' 2> /dev/null\
+             && break
+            sleep 1
+          done
+      - name: Show service logs
+        timeout-minutes: 1
+        run: |
+          docker compose --profile=use-only-${{ matrix.platform }} logs provisioning-use-only-${{ matrix.platform }}
+      - name: Exec Terraform - check the format for each tf file
+        run: |
+          docker compose --profile=use-only-${{ matrix.platform }} exec provisioning-use-only-${{ matrix.platform }} terraform fmt -check -recursive
+      - name: Exec Terraform - validate
+        run: |
+          docker compose --profile=use-only-${{ matrix.platform }} exec provisioning-use-only-${{ matrix.platform }} terraform validate
+      - name: Exec Terraform - dry-run
+        timeout-minutes: 1
+        run: |
+          docker compose --profile=use-only-${{ matrix.platform }} exec provisioning-use-only-${{ matrix.platform }} terraform plan
+      - name: Exec Terraform - apply
+        timeout-minutes: 1
+        if: github.ref == 'refs/heads/main'
+        run: |
+          docker compose --profile=use-only-${{ matrix.platform }} exec provisioning-use-only-${{ matrix.platform }} terraform apply -auto-approve
+      - name: Stop the service
+        timeout-minutes: 1
+        run: |
+          docker compose --profile=use-only-${{ matrix.platform }} down --remove-orphans
