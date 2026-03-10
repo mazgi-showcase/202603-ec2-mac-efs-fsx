@@ -1,0 +1,14 @@
+services:
+  iac:
+    build:
+      context: ./iac
+      dockerfile: ../Dockerfiles.d/iac/Dockerfile
+    env_file:
+      - .secrets.env
+      - .env
+    profiles:
+      - iac
+    volumes:
+      - .:/work
+      - ~/.aws:/root/.aws:ro
+    working_dir: /work

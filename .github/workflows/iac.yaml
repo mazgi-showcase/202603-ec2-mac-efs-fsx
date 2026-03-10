@@ -1,0 +1,29 @@
+name: IaC Persistent
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'iac/aws/*'
+      - '.github/workflows/iac.yaml'
+      - '.github/workflows/_reusable-iac.yaml'
+  push:
+    branches: [main]
+    paths:
+      - 'iac/aws/*'
+      - '.github/workflows/iac.yaml'
+      - '.github/workflows/_reusable-iac.yaml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+  pull-requests: write
+
+jobs:
+  persistent:
+    name: Persistent
+    uses: ./.github/workflows/_reusable-iac.yaml
+    with:
+      apply: ${{ github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') }}
+    secrets: inherit

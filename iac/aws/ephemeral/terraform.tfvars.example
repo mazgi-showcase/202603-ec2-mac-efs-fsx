@@ -1,0 +1,9 @@
+app_unique_id = "my-infra"
+
+# Terraform remote state (must match the persistent layer's S3 backend)
+aws_tf_state_bucket = "my-terraform-state"
+aws_tf_state_region = "us-east-1"
+
+# AWS Managed Microsoft AD admin password (required by FSx for Windows)
+# Must be 8+ characters with uppercase, lowercase, and digit.
+ad_admin_password = "CHANGE_ME"

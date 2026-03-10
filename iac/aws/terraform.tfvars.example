@@ -1,0 +1,3 @@
+app_unique_id = "my-infra"
+
+aws_region = "us-east-1"
